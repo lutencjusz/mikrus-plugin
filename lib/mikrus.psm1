@@ -102,3 +102,19 @@ function Get-MikrusFile {
     $output = & scp @scpArgs 2>&1
     return [pscustomobject]@{ Output = $output; ExitCode = $LASTEXITCODE }
 }
+
+function New-MikrusApiRequest {
+    param(
+        [Parameter(Mandatory)] $Config,
+        [Parameter(Mandatory)][string]$Endpoint,
+        [hashtable]$Body
+    )
+    $base = ([string]$Config.apiBase).TrimEnd('/')
+    $ep   = $Endpoint.TrimStart('/')
+    $url  = "$base/$ep"
+    $fields = @{ srv = $Config.srv }
+    if ($Body) {
+        foreach ($k in $Body.Keys) { $fields[$k] = $Body[$k] }
+    }
+    return @{ Url = $url; Fields = $fields }
+}

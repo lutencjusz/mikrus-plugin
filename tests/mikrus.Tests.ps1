@@ -98,3 +98,31 @@ Describe 'Send-MikrusFile -DryRun' {
         $cmd[-1] | Should -Be 'root@srv03.mikr.us:/root/plik.txt'
     }
 }
+
+Describe 'New-MikrusApiRequest' {
+    BeforeAll {
+        $script:cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+    }
+
+    It 'buduje URL z apiBase i endpointu oraz dodaje srv' {
+        $r = New-MikrusApiRequest -Config $script:cfg -Endpoint '/info'
+        $r.Url | Should -Be 'https://api.mikr.us/info'
+        $r.Fields['srv'] | Should -Be 'a123'
+    }
+
+    It 'normalizuje ukosniki (brak podwojnego /)' {
+        $cfg2 = $script:cfg.PSObject.Copy(); $cfg2.apiBase = 'https://api.mikr.us/'
+        $r = New-MikrusApiRequest -Config $cfg2 -Endpoint 'stats'
+        $r.Url | Should -Be 'https://api.mikr.us/stats'
+    }
+
+    It 'dolacza dodatkowe pola z Body (np. domain/port)' {
+        $r = New-MikrusApiRequest -Config $script:cfg -Endpoint '/domain' -Body @{ port='30123'; domain='example.com' }
+        $r.Fields['port'] | Should -Be '30123'
+        $r.Fields['domain'] | Should -Be 'example.com'
+        $r.Fields['srv'] | Should -Be 'a123'
+    }
+}
