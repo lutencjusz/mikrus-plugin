@@ -13,6 +13,8 @@ Skille Claude Code do obsługi serwera VPS [Mikrus](https://mikr.us): komendy pr
 - Klucz SSH wgrany na serwer Mikrus.
 - Klucz API z https://mikr.us/panel/?a=api
 
+> **Uwaga o lokalizacji:** skille importują moduł zaszytą ścieżką `C:\claude\mikrus-plugin\lib\mikrus.psm1`. Jeśli przeniesiesz plugin w inne miejsce, zaktualizuj `Import-Module` w plikach `skills/*/SKILL.md`.
+
 ## Konfiguracja
 Uruchom skill **mikrus-setup**, który utworzy `C:\Users\<user>\.mikrus\config.json`:
 ```json
