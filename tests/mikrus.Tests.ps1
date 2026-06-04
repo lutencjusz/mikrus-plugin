@@ -160,4 +160,13 @@ Describe 'Invoke-MikrusApi' {
             { Invoke-MikrusApi -Endpoint '/info' -Config $cfg } | Should -Throw -ExpectedMessage '*Niepoprawna odpowiedz*'
         }
     }
+
+    It 'nie wywala sie gdy odpowiedz JSON jest golym skalarem' {
+        InModuleScope mikrus {
+            Mock Invoke-MikrusCurl { '42' }
+            $cfg = [pscustomobject]@{ srv='a123'; host='h'; sshPort=10123; user='root'; identityFile='k'; apiKey='SECRET'; apiBase='https://api.mikr.us' }
+            $r = Invoke-MikrusApi -Endpoint '/info' -Config $cfg
+            $r | Should -Be 42
+        }
+    }
 }

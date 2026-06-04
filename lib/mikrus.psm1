@@ -150,7 +150,7 @@ function Invoke-MikrusApi {
     } catch {
         throw "Niepoprawna odpowiedz API ($Endpoint): $raw"
     }
-    if ($data.PSObject.Properties.Name -contains 'error') {
+    if (($data -is [System.Management.Automation.PSCustomObject]) -and ($data.PSObject.Properties.Name -contains 'error')) {
         throw "API Mikrus zwrocilo blad ($Endpoint): $($data.error)"
     }
     return $data
