@@ -23,3 +23,34 @@ function Get-MikrusConfig {
     }
     return $cfg
 }
+
+function New-MikrusSSHArgs {
+    param(
+        [Parameter(Mandatory)] $Config,
+        [Parameter(Mandatory)][string]$Command
+    )
+    return @(
+        '-p', "$($Config.sshPort)"
+        '-i', "$($Config.identityFile)"
+        '-o', 'BatchMode=yes'
+        "$($Config.user)@$($Config.host)"
+        $Command
+    )
+}
+
+function Invoke-MikrusSSH {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Command,
+        $Config,
+        [switch]$DryRun
+    )
+    if (-not $Config) { $Config = Get-MikrusConfig }
+    $sshArgs = New-MikrusSSHArgs -Config $Config -Command $Command
+    if ($DryRun) { return @('ssh') + $sshArgs }
+    $output = & ssh @sshArgs 2>&1
+    return [pscustomobject]@{
+        Output   = $output
+        ExitCode = $LASTEXITCODE
+    }
+}

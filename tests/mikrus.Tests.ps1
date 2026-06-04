@@ -34,3 +34,30 @@ Describe 'Get-MikrusConfig' {
         { Get-MikrusConfig -Path $path } | Should -Throw -ExpectedMessage '*apiKey*'
     }
 }
+
+Describe 'New-MikrusSSHArgs' {
+    BeforeAll {
+        $script:cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+    }
+
+    It 'buduje argumenty ssh z portem, kluczem i BatchMode' {
+        $a = New-MikrusSSHArgs -Config $script:cfg -Command 'echo ok'
+        $a | Should -Be @('-p','10123','-i','C:\keys\mikrus_ed25519','-o','BatchMode=yes','root@srv03.mikr.us','echo ok')
+    }
+}
+
+Describe 'Invoke-MikrusSSH -DryRun' {
+    It 'zwraca pelna komende ssh bez wykonania' {
+        $cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+        $cmd = Invoke-MikrusSSH -Command 'uptime' -Config $cfg -DryRun
+        $cmd[0] | Should -Be 'ssh'
+        $cmd | Should -Contain 'root@srv03.mikr.us'
+        $cmd[-1] | Should -Be 'uptime'
+    }
+}
