@@ -118,3 +118,40 @@ function New-MikrusApiRequest {
     }
     return @{ Url = $url; Fields = $fields }
 }
+
+function Invoke-MikrusCurl {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][hashtable]$Fields,
+        [Parameter(Mandatory)][string]$ApiKey
+    )
+    $curlArgs = @('-s', '-X', 'POST', $Url, '-H', "Authorization: $ApiKey")
+    foreach ($k in $Fields.Keys) {
+        $curlArgs += @('-d', "$k=$($Fields[$k])")
+    }
+    return (& curl @curlArgs)
+}
+
+function Invoke-MikrusApi {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Endpoint,
+        [hashtable]$Body,
+        $Config
+    )
+    if (-not $Config) { $Config = Get-MikrusConfig }
+    $req = New-MikrusApiRequest -Config $Config -Endpoint $Endpoint -Body $Body
+    $raw = Invoke-MikrusCurl -Url $req.Url -Fields $req.Fields -ApiKey $Config.apiKey
+    if ([string]::IsNullOrWhiteSpace([string]$raw)) {
+        throw "Brak odpowiedzi z API Mikrus ($Endpoint)."
+    }
+    try {
+        $data = $raw | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "Niepoprawna odpowiedz API ($Endpoint): $raw"
+    }
+    if ($data.PSObject.Properties.Name -contains 'error') {
+        throw "API Mikrus zwrocilo blad ($Endpoint): $($data.error)"
+    }
+    return $data
+}

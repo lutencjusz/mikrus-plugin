@@ -126,3 +126,38 @@ Describe 'New-MikrusApiRequest' {
         $r.Fields['srv'] | Should -Be 'a123'
     }
 }
+
+Describe 'Invoke-MikrusApi' {
+    BeforeAll {
+        $script:cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+    }
+
+    It 'parsuje poprawny JSON na obiekt' {
+        InModuleScope mikrus {
+            Mock Invoke-MikrusCurl { '{"server_id":"a123","status":"running"}' }
+            $cfg = [pscustomobject]@{ srv='a123'; host='h'; sshPort=10123; user='root'; identityFile='k'; apiKey='SECRET'; apiBase='https://api.mikr.us' }
+            $r = Invoke-MikrusApi -Endpoint '/info' -Config $cfg
+            $r.server_id | Should -Be 'a123'
+            $r.status | Should -Be 'running'
+        }
+    }
+
+    It 'rzuca czytelny blad gdy API zwraca pole error' {
+        InModuleScope mikrus {
+            Mock Invoke-MikrusCurl { '{"error":"nieprawidlowy klucz"}' }
+            $cfg = [pscustomobject]@{ srv='a123'; host='h'; sshPort=10123; user='root'; identityFile='k'; apiKey='SECRET'; apiBase='https://api.mikr.us' }
+            { Invoke-MikrusApi -Endpoint '/info' -Config $cfg } | Should -Throw -ExpectedMessage '*nieprawidlowy klucz*'
+        }
+    }
+
+    It 'rzuca blad gdy odpowiedz nie jest JSON-em' {
+        InModuleScope mikrus {
+            Mock Invoke-MikrusCurl { '<html>502 Bad Gateway</html>' }
+            $cfg = [pscustomobject]@{ srv='a123'; host='h'; sshPort=10123; user='root'; identityFile='k'; apiKey='SECRET'; apiBase='https://api.mikr.us' }
+            { Invoke-MikrusApi -Endpoint '/info' -Config $cfg } | Should -Throw -ExpectedMessage '*Niepoprawna odpowiedz*'
+        }
+    }
+}
