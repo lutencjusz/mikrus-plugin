@@ -61,3 +61,40 @@ Describe 'Invoke-MikrusSSH -DryRun' {
         $cmd[-1] | Should -Be 'uptime'
     }
 }
+
+Describe 'New-MikrusScpArgs' {
+    BeforeAll {
+        $script:cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+    }
+
+    It 'upload: lokalny przed zdalnym, port wielka P' {
+        $a = New-MikrusScpArgs -Config $script:cfg -Direction up -Local 'C:\plik.txt' -Remote '/root/plik.txt'
+        $a | Should -Be @('-P','10123','-i','C:\keys\mikrus_ed25519','-o','BatchMode=yes','C:\plik.txt','root@srv03.mikr.us:/root/plik.txt')
+    }
+
+    It 'download: zdalny przed lokalnym' {
+        $a = New-MikrusScpArgs -Config $script:cfg -Direction down -Local 'C:\plik.txt' -Remote '/root/plik.txt'
+        $a[-2] | Should -Be 'root@srv03.mikr.us:/root/plik.txt'
+        $a[-1] | Should -Be 'C:\plik.txt'
+    }
+
+    It 'dodaje -r dla katalogow' {
+        $a = New-MikrusScpArgs -Config $script:cfg -Direction up -Local 'C:\dir' -Remote '/root/dir' -Recurse
+        $a | Should -Contain '-r'
+    }
+}
+
+Describe 'Send-MikrusFile -DryRun' {
+    It 'zwraca komende scp upload' {
+        $cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+        $cmd = Send-MikrusFile -Local 'C:\plik.txt' -Remote '/root/plik.txt' -Config $cfg -DryRun
+        $cmd[0] | Should -Be 'scp'
+        $cmd[-1] | Should -Be 'root@srv03.mikr.us:/root/plik.txt'
+    }
+}

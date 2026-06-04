@@ -54,3 +54,51 @@ function Invoke-MikrusSSH {
         ExitCode = $LASTEXITCODE
     }
 }
+
+function New-MikrusScpArgs {
+    param(
+        [Parameter(Mandatory)] $Config,
+        [Parameter(Mandatory)][ValidateSet('up','down')][string]$Direction,
+        [Parameter(Mandatory)][string]$Local,
+        [Parameter(Mandatory)][string]$Remote,
+        [switch]$Recurse
+    )
+    $remoteSpec = "$($Config.user)@$($Config.host):$Remote"
+    $scpArgs = @('-P', "$($Config.sshPort)", '-i', "$($Config.identityFile)", '-o', 'BatchMode=yes')
+    if ($Recurse) { $scpArgs += '-r' }
+    if ($Direction -eq 'up') { $scpArgs += @($Local, $remoteSpec) }
+    else { $scpArgs += @($remoteSpec, $Local) }
+    return $scpArgs
+}
+
+function Send-MikrusFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Local,
+        [Parameter(Mandatory)][string]$Remote,
+        $Config,
+        [switch]$Recurse,
+        [switch]$DryRun
+    )
+    if (-not $Config) { $Config = Get-MikrusConfig }
+    $scpArgs = New-MikrusScpArgs -Config $Config -Direction up -Local $Local -Remote $Remote -Recurse:$Recurse
+    if ($DryRun) { return @('scp') + $scpArgs }
+    $output = & scp @scpArgs 2>&1
+    return [pscustomobject]@{ Output = $output; ExitCode = $LASTEXITCODE }
+}
+
+function Get-MikrusFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Remote,
+        [Parameter(Mandatory)][string]$Local,
+        $Config,
+        [switch]$Recurse,
+        [switch]$DryRun
+    )
+    if (-not $Config) { $Config = Get-MikrusConfig }
+    $scpArgs = New-MikrusScpArgs -Config $Config -Direction down -Local $Local -Remote $Remote -Recurse:$Recurse
+    if ($DryRun) { return @('scp') + $scpArgs }
+    $output = & scp @scpArgs 2>&1
+    return [pscustomobject]@{ Output = $output; ExitCode = $LASTEXITCODE }
+}
