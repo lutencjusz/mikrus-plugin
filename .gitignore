@@ -3,3 +3,7 @@ config.json
 *.key
 *.pem
 .mikrus/
+CLAUDE.md
+
+# Pliki IDE (JetBrains)
+.idea/

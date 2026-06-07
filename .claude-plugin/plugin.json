@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Obsługa serwera VPS Mikrus: komendy przez SSH, transfer plików (SCP) i operacje przez API mikr.us.",
   "author": {
-    "name": "micha"
+    "name": "lutencjusz"
   },
   "keywords": ["mikrus", "vps", "ssh", "scp", "api", "devops"]
 }

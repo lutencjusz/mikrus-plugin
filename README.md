@@ -8,6 +8,26 @@ Skille Claude Code do obsługi serwera VPS [Mikrus](https://mikr.us): komendy pr
 - **mikrus-files** — transfer plików przez SCP.
 - **mikrus-api** — operacje przez API (info, stats, porty, db, logi, restart, domain…).
 
+## Dostępność we wszystkich projektach
+Aby skille były widoczne w każdym projekcie (niezależnie od katalogu roboczego), w globalnej lokalizacji `~/.claude/skills/` (`C:\Users\<user>\.claude\skills\`) — którą Claude Code ładuje automatycznie — utworzono **Junction Points** wskazujące na katalogi `skills/` w tym repo:
+
+```
+~/.claude/skills/mikrus-api      ->  C:\claude\mikrus-plugin\skills\mikrus-api
+~/.claude/skills/mikrus-files    ->  C:\claude\mikrus-plugin\skills\mikrus-files
+~/.claude/skills/mikrus-setup    ->  C:\claude\mikrus-plugin\skills\mikrus-setup
+~/.claude/skills/mikrus-terminal ->  C:\claude\mikrus-plugin\skills\mikrus-terminal
+```
+
+Dzięki temu zmiany w repo propagują się automatycznie — **nie trzeba nic ręcznie odświeżać**. Junction Points na Windows nie wymagają uprawnień administratora.
+
+> **Odtworzenie linków** (np. po świeżym klonie repo na nowej maszynie):
+> ```powershell
+> foreach ($s in 'mikrus-api','mikrus-files','mikrus-setup','mikrus-terminal') {
+>   New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\$s" -Target "C:\claude\mikrus-plugin\skills\$s"
+> }
+> ```
+> **Uwaga:** jeśli przeniesiesz plugin w inne miejsce niż `C:\claude\mikrus-plugin`, usuń stare junctiony i utwórz je ponownie ze zaktualizowanym `-Target`.
+
 ## Wymagania
 - Windows z PowerShell 7 (`pwsh`), OpenSSH (`ssh`/`scp`), `curl`.
 - Klucz SSH wgrany na serwer Mikrus.
