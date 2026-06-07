@@ -127,6 +127,34 @@ Describe 'New-MikrusApiRequest' {
     }
 }
 
+Describe 'New-MikrusCurlArgs' {
+    It 'uzywa --data-urlencode dla pol (kodowanie wartosci)' {
+        $a = New-MikrusCurlArgs -Url 'https://api.mikr.us/exec' -Fields @{ cmd = 'a && b' }
+        $a | Should -Contain '--data-urlencode'
+        $a | Should -Contain 'cmd=a && b'
+        $a | Should -Not -Contain '-d'
+    }
+
+    It 'czyta klucz z stdin (-K -), wiec nie ma go w argumentach' {
+        $a = New-MikrusCurlArgs -Url 'https://api.mikr.us/info' -Fields @{ srv = 'a123' }
+        $a | Should -Contain '-K'
+        ($a -join ' ') | Should -Not -Match 'Authorization'
+    }
+
+    It 'zawiera URL oraz metode POST' {
+        $a = New-MikrusCurlArgs -Url 'https://api.mikr.us/info' -Fields @{ srv = 'a123' }
+        $a | Should -Contain 'https://api.mikr.us/info'
+        $a | Should -Contain 'POST'
+    }
+}
+
+Describe 'New-MikrusCurlConfig' {
+    It 'buduje linie naglowka z kluczem (do podania przez stdin)' {
+        $c = New-MikrusCurlConfig -ApiKey 'SECRET'
+        $c | Should -Be 'header = "Authorization: SECRET"'
+    }
+}
+
 Describe 'Invoke-MikrusApi' {
     BeforeAll {
         $script:cfg = [pscustomobject]@{

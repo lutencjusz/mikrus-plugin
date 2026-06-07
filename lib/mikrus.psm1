@@ -119,17 +119,37 @@ function New-MikrusApiRequest {
     return @{ Url = $url; Fields = $fields }
 }
 
+function New-MikrusCurlArgs {
+    # Buduje argumenty curl BEZ klucza API. Klucz idzie przez stdin (-K -),
+    # by nie pojawil sie w linii polecen procesu. Wartosci pol kodowane (--data-urlencode).
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][hashtable]$Fields
+    )
+    $curlArgs = @('-s', '-X', 'POST', '-K', '-', $Url)
+    foreach ($k in $Fields.Keys) {
+        $curlArgs += @('--data-urlencode', "$k=$($Fields[$k])")
+    }
+    return $curlArgs
+}
+
+function New-MikrusCurlConfig {
+    # Plik konfiguracyjny curl (przekazywany przez stdin) z naglowkiem autoryzacji.
+    param(
+        [Parameter(Mandatory)][string]$ApiKey
+    )
+    return "header = `"Authorization: $ApiKey`""
+}
+
 function Invoke-MikrusCurl {
     param(
         [Parameter(Mandatory)][string]$Url,
         [Parameter(Mandatory)][hashtable]$Fields,
         [Parameter(Mandatory)][string]$ApiKey
     )
-    $curlArgs = @('-s', '-X', 'POST', $Url, '-H', "Authorization: $ApiKey")
-    foreach ($k in $Fields.Keys) {
-        $curlArgs += @('-d', "$k=$($Fields[$k])")
-    }
-    return (& curl @curlArgs)
+    $curlArgs = New-MikrusCurlArgs -Url $Url -Fields $Fields
+    $config   = New-MikrusCurlConfig -ApiKey $ApiKey
+    return ($config | & curl.exe @curlArgs)
 }
 
 function Invoke-MikrusApi {
