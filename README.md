@@ -1,15 +1,17 @@
 # Plugin `mikrus`
 
-Skille Claude Code do obsługi serwera VPS [Mikrus](https://mikr.us): komendy przez SSH, transfer plików (SCP) i operacje przez API `api.mikr.us`.
+[PL](README_PL.md)
 
-## Skille
-- **mikrus-setup** — konfiguracja połączenia i test (`~/.mikrus/config.json`).
-- **mikrus-terminal** — wykonywanie komend przez SSH.
-- **mikrus-files** — transfer plików przez SCP.
-- **mikrus-api** — operacje przez API (info, stats, porty, db, logi, restart, domain…).
+Claude Code skills for managing the [Mikrus](https://mikr.us) VPS: commands over SSH, file transfer (SCP) and operations through the `api.mikr.us` API.
 
-## Dostępność we wszystkich projektach
-Aby skille były widoczne w każdym projekcie (niezależnie od katalogu roboczego), w globalnej lokalizacji `~/.claude/skills/` (`C:\Users\<user>\.claude\skills\`) — którą Claude Code ładuje automatycznie — utworzono **Junction Points** wskazujące na katalogi `skills/` w tym repo:
+## Skills
+- **mikrus-setup** — connection configuration and test (`~/.mikrus/config.json`).
+- **mikrus-terminal** — running commands over SSH.
+- **mikrus-files** — file transfer over SCP.
+- **mikrus-api** — operations through the API (info, stats, ports, db, logs, restart, domain…).
+
+## Availability across all projects
+So that the skills are visible in every project (regardless of the working directory), **Junction Points** pointing to the `skills/` directories in this repo were created in the global location `~/.claude/skills/` (`C:\Users\<user>\.claude\skills\`), which Claude Code loads automatically:
 
 ```
 ~/.claude/skills/mikrus-api      ->  C:\claude\mikrus-plugin\skills\mikrus-api
@@ -18,25 +20,25 @@ Aby skille były widoczne w każdym projekcie (niezależnie od katalogu roboczeg
 ~/.claude/skills/mikrus-terminal ->  C:\claude\mikrus-plugin\skills\mikrus-terminal
 ```
 
-Dzięki temu zmiany w repo propagują się automatycznie — **nie trzeba nic ręcznie odświeżać**. Junction Points na Windows nie wymagają uprawnień administratora.
+Thanks to this, changes in the repo propagate automatically — **nothing needs to be refreshed manually**. Junction Points on Windows do not require administrator privileges.
 
-> **Odtworzenie linków** (np. po świeżym klonie repo na nowej maszynie):
+> **Recreating the links** (e.g. after a fresh clone of the repo on a new machine):
 > ```powershell
 > foreach ($s in 'mikrus-api','mikrus-files','mikrus-setup','mikrus-terminal') {
 >   New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\$s" -Target "C:\claude\mikrus-plugin\skills\$s"
 > }
 > ```
-> **Uwaga:** jeśli przeniesiesz plugin w inne miejsce niż `C:\claude\mikrus-plugin`, usuń stare junctiony i utwórz je ponownie ze zaktualizowanym `-Target`.
+> **Note:** if you move the plugin somewhere other than `C:\claude\mikrus-plugin`, delete the old junctions and recreate them with an updated `-Target`.
 
-## Wymagania
-- Windows z PowerShell 7 (`pwsh`), OpenSSH (`ssh`/`scp`), `curl`.
-- Klucz SSH wgrany na serwer Mikrus.
-- Klucz API z https://mikr.us/panel/?a=api
+## Requirements
+- Windows with PowerShell 7 (`pwsh`), OpenSSH (`ssh`/`scp`), `curl`.
+- SSH key uploaded to the Mikrus server.
+- API key from https://mikr.us/panel/?a=api
 
-> **Uwaga o lokalizacji:** skille importują moduł zaszytą ścieżką `C:\claude\mikrus-plugin\lib\mikrus.psm1`. Jeśli przeniesiesz plugin w inne miejsce, zaktualizuj `Import-Module` w plikach `skills/*/SKILL.md`.
+> **Note on location:** the skills import the module using the hardcoded path `C:\claude\mikrus-plugin\lib\mikrus.psm1`. If you move the plugin elsewhere, update `Import-Module` in the `skills/*/SKILL.md` files.
 
-## Konfiguracja
-Uruchom skill **mikrus-setup**, który utworzy `C:\Users\<user>\.mikrus\config.json`:
+## Configuration
+Run the **mikrus-setup** skill, which creates `C:\Users\<user>\.mikrus\config.json`:
 ```json
 {
   "srv": "a123",
@@ -48,14 +50,14 @@ Uruchom skill **mikrus-setup**, który utworzy `C:\Users\<user>\.mikrus\config.j
   "apiBase": "https://api.mikr.us"
 }
 ```
-`sshPort` = 10000 + numer maszyny.
+`sshPort` = 10000 + machine number.
 
-## ⚠️ Bezpieczeństwo
-- **Nie commituj** `config.json` ani kluczy — `.gitignore` chroni je w tym repo, ale plik konfiguracyjny i tak żyje poza repo (`~/.mikrus`).
-- Logowanie wyłącznie kluczem SSH; nie używaj portu 22 (blokada IP po nieudanych próbach).
-- Dane z API `/db` oraz `apiKey` są wrażliwe — nie udostępniaj ich w logach/odpowiedziach.
+## ⚠️ Security
+- **Do not commit** `config.json` or keys — `.gitignore` protects them in this repo, but the configuration file lives outside the repo anyway (`~/.mikrus`).
+- Log in with the SSH key only; do not use port 22 (IP gets blocked after failed attempts).
+- Data from the `/db` API and the `apiKey` are sensitive — do not expose them in logs/responses.
 
-## Testy
+## Tests
 ```powershell
 pwsh -NoProfile -Command "Invoke-Pester -Path tests/mikrus.Tests.ps1 -Output Detailed"
 ```
