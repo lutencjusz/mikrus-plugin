@@ -10,43 +10,31 @@ Claude Code skills for managing the [Mikrus](https://mikr.us) VPS: commands over
 - **mikrus-files** — file transfer over SCP.
 - **mikrus-api** — operations through the API (info, stats, ports, db, logs, restart, domain…).
 
-## Availability across all projects
-So that the skills are visible in every project (regardless of the working directory), **Junction Points** pointing to the `skills/` directories in this repo were created in the global location `~/.claude/skills/` (`C:\Users\<user>\.claude\skills\`), which Claude Code loads automatically:
+## Installation
+Install through the Claude Code plugin marketplace:
 
 ```
-~/.claude/skills/mikrus-api      ->  C:\claude\mikrus-plugin\skills\mikrus-api
-~/.claude/skills/mikrus-files    ->  C:\claude\mikrus-plugin\skills\mikrus-files
-~/.claude/skills/mikrus-setup    ->  C:\claude\mikrus-plugin\skills\mikrus-setup
-~/.claude/skills/mikrus-terminal ->  C:\claude\mikrus-plugin\skills\mikrus-terminal
+/plugin marketplace add lutencjusz/mikrus-plugin
+/plugin install mikrus@mikrus-plugin
 ```
 
-Thanks to this, changes in the repo propagate automatically — **nothing needs to be refreshed manually**. Junction Points on Windows do not require administrator privileges.
-
-> **Recreating the links** (e.g. after a fresh clone of the repo on a new machine):
-> ```powershell
-> foreach ($s in 'mikrus-api','mikrus-files','mikrus-setup','mikrus-terminal') {
->   New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\$s" -Target "C:\claude\mikrus-plugin\skills\$s"
-> }
-> ```
-> **Note:** if you move the plugin somewhere other than `C:\claude\mikrus-plugin`, delete the old junctions and recreate them with an updated `-Target`.
+The skills import the shared PowerShell module via `$env:CLAUDE_PLUGIN_ROOT`, so the plugin works from any project regardless of where Claude Code installs it — nothing has to be wired up by hand.
 
 ## Requirements
 - Windows with PowerShell 7 (`pwsh`), OpenSSH (`ssh`/`scp`), `curl`.
 - SSH key uploaded to the Mikrus server.
 - API key from https://mikr.us/panel/?a=api
 
-> **Note on location:** the skills import the module using the hardcoded path `C:\claude\mikrus-plugin\lib\mikrus.psm1`. If you move the plugin elsewhere, update `Import-Module` in the `skills/*/SKILL.md` files.
-
 ## Configuration
-Run the **mikrus-setup** skill, which creates `C:\Users\<user>\.mikrus\config.json`:
+Run the **mikrus-setup** skill, which creates `~/.mikrus/config.json` (on Windows `%USERPROFILE%\.mikrus\config.json`). See [`config.example.json`](config.example.json):
 ```json
 {
   "srv": "a123",
-  "host": "srv03.mikr.us",
+  "host": "srvXX.mikr.us",
   "sshPort": 10123,
   "user": "root",
-  "identityFile": "C:\\Users\\micha\\.ssh\\mikrus_ed25519",
-  "apiKey": "xxxxxxxx",
+  "identityFile": "~/.ssh/mikrus_ed25519",
+  "apiKey": "xxxxxxxxxxxxxxxx",
   "apiBase": "https://api.mikr.us"
 }
 ```

@@ -1,0 +1,9 @@
+{
+  "srv": "a123",
+  "host": "srvXX.mikr.us",
+  "sshPort": 10123,
+  "user": "root",
+  "identityFile": "~/.ssh/mikrus_ed25519",
+  "apiKey": "xxxxxxxxxxxxxxxx",
+  "apiBase": "https://api.mikr.us"
+}

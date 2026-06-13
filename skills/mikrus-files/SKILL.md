@@ -10,7 +10,7 @@ Przesyła pliki między komputerem lokalnym a serwerem Mikrus przez SCP.
 ## Użycie
 
 ```powershell
-Import-Module "C:\claude\mikrus-plugin\lib\mikrus.psm1" -Force
+Import-Module "$env:CLAUDE_PLUGIN_ROOT/lib/mikrus.psm1" -Force
 
 # Wysłanie pliku na serwer
 Send-MikrusFile -Local 'C:\dane\backup.zip' -Remote '/root/backup.zip'

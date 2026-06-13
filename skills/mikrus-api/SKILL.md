@@ -10,7 +10,7 @@ Wykonuje operacje na serwerze Mikrus przez API `https://api.mikr.us`.
 ## Użycie
 
 ```powershell
-Import-Module "C:\claude\mikrus-plugin\lib\mikrus.psm1" -Force
+Import-Module "$env:CLAUDE_PLUGIN_ROOT/lib/mikrus.psm1" -Force
 Invoke-MikrusApi -Endpoint '/info'
 ```
 

@@ -9,7 +9,7 @@ Konfiguruje połączenie z serwerem VPS Mikrus i testuje je.
 
 ## Konfiguracja docelowa
 
-Plik `C:\Users\micha\.mikrus\config.json` (poza repozytorium pluginu):
+Plik `~/.mikrus/config.json` (poza repozytorium pluginu; na Windows `%USERPROFILE%\.mikrus\config.json`):
 
 | Pole | Znaczenie | Źródło |
 |------|-----------|--------|
@@ -27,12 +27,12 @@ Plik `C:\Users\micha\.mikrus\config.json` (poza repozytorium pluginu):
 2. Wylicz `sshPort = 10000 + numer maszyny`. Potwierdź wynik z użytkownikiem.
 3. Zaimportuj moduł i zapisz konfigurację:
    ```powershell
-   Import-Module "C:\claude\mikrus-plugin\lib\mikrus.psm1" -Force
+   Import-Module "$env:CLAUDE_PLUGIN_ROOT/lib/mikrus.psm1" -Force
    $dir = Join-Path $HOME '.mikrus'
    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force $dir | Out-Null }
    @{
      srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
-     identityFile='C:\Users\micha\.ssh\mikrus_ed25519'
+     identityFile=(Join-Path $HOME '.ssh/mikrus_ed25519')
      apiKey='WKLEJ_KLUCZ'; apiBase='https://api.mikr.us'
    } | ConvertTo-Json | Set-Content -Path (Join-Path $dir 'config.json') -Encoding utf8
    ```

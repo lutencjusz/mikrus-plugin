@@ -10,7 +10,7 @@ Wykonuje komendy na serwerze Mikrus przez SSH (pełny shell roota, bez limitu 60
 ## Użycie
 
 ```powershell
-Import-Module "C:\claude\mikrus-plugin\lib\mikrus.psm1" -Force
+Import-Module "$env:CLAUDE_PLUGIN_ROOT/lib/mikrus.psm1" -Force
 $wynik = Invoke-MikrusSSH -Command 'df -h'
 $wynik.Output
 $wynik.ExitCode   # 0 = sukces

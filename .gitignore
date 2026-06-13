@@ -1,5 +1,6 @@
 # Nigdy nie commituj sekretów ani lokalnej konfiguracji Mikrusa
 config.json
+.env
 *.key
 *.pem
 .mikrus/

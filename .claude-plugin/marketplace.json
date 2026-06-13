@@ -1,0 +1,12 @@
+{
+  "name": "mikrus-plugin",
+  "owner": { "name": "lutencjusz", "url": "https://github.com/lutencjusz" },
+  "plugins": [
+    {
+      "name": "mikrus",
+      "source": "./",
+      "description": "Obsługa serwera VPS Mikrus: komendy przez SSH, transfer plików (SCP) i operacje przez API mikr.us.",
+      "version": "0.1.0"
+    }
+  ]
+}

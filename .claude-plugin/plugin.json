@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "description": "Obsługa serwera VPS Mikrus: komendy przez SSH, transfer plików (SCP) i operacje przez API mikr.us.",
   "author": {
-    "name": "lutencjusz"
+    "name": "lutencjusz",
+    "url": "https://github.com/lutencjusz"
   },
+  "license": "MIT",
+  "homepage": "https://github.com/lutencjusz/mikrus-plugin",
+  "repository": "https://github.com/lutencjusz/mikrus-plugin",
   "keywords": ["mikrus", "vps", "ssh", "scp", "api", "devops"]
 }
