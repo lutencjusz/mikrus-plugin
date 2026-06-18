@@ -45,7 +45,27 @@ Describe 'New-MikrusSSHArgs' {
 
     It 'buduje argumenty ssh z portem, kluczem i BatchMode' {
         $a = New-MikrusSSHArgs -Config $script:cfg -Command 'echo ok'
-        $a | Should -Be @('-p','10123','-i','C:\keys\mikrus_ed25519','-o','BatchMode=yes','root@srv03.mikr.us','echo ok')
+        # Prefiks bazowy stabilny; host i komenda zawsze na koncu.
+        $a[0..5] | Should -Be @('-p','10123','-i','C:\keys\mikrus_ed25519','-o','BatchMode=yes')
+        $a[-2] | Should -Be 'root@srv03.mikr.us'
+        $a[-1] | Should -Be 'echo ok'
+    }
+
+    It 'dodaje opcje limitu czasu (ConnectTimeout + ServerAlive)' {
+        $a = New-MikrusSSHArgs -Config $script:cfg -Command 'echo ok'
+        ($a -join ' ') | Should -Match 'ConnectTimeout=\d+'
+        ($a -join ' ') | Should -Match 'ServerAliveInterval=\d+'
+        ($a -join ' ') | Should -Match 'ServerAliveCountMax=\d+'
+    }
+
+    It 'pola config nadpisuja domyslne limity' {
+        $cfg2 = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+            connectTimeout=7
+        }
+        $a = New-MikrusSSHArgs -Config $cfg2 -Command 'echo ok'
+        $a | Should -Contain 'ConnectTimeout=7'
     }
 }
 
@@ -72,7 +92,10 @@ Describe 'New-MikrusScpArgs' {
 
     It 'upload: lokalny przed zdalnym, port wielka P' {
         $a = New-MikrusScpArgs -Config $script:cfg -Direction up -Local 'C:\plik.txt' -Remote '/root/plik.txt'
-        $a | Should -Be @('-P','10123','-i','C:\keys\mikrus_ed25519','-o','BatchMode=yes','C:\plik.txt','root@srv03.mikr.us:/root/plik.txt')
+        $a[0..5] | Should -Be @('-P','10123','-i','C:\keys\mikrus_ed25519','-o','BatchMode=yes')
+        ($a -join ' ') | Should -Match 'ConnectTimeout=\d+'
+        $a[-2] | Should -Be 'C:\plik.txt'
+        $a[-1] | Should -Be 'root@srv03.mikr.us:/root/plik.txt'
     }
 
     It 'download: zdalny przed lokalnym' {

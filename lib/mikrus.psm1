@@ -24,6 +24,40 @@ function Get-MikrusConfig {
     return $cfg
 }
 
+# Domyslne limity czasu polaczenia (sekundy). Bez nich ssh/scp potrafi wisiec
+# w nieskonczonosc: ConnectTimeout ucina martwy handshake TCP, a ServerAlive*
+# wykrywa sesje, ktora zawisla juz PO polaczeniu (np. kontener pod presja RAM
+# przyjmuje TCP, ale sshd przestaje odpowiadac). Mozna nadpisac przez pola
+# connectTimeout / serverAliveInterval / serverAliveCountMax w config.json.
+$script:MikrusDefaultConnectTimeout    = 15
+$script:MikrusDefaultServerAliveInt    = 10
+$script:MikrusDefaultServerAliveCount  = 3
+
+function Get-MikrusConnectOption {
+    param(
+        [Parameter(Mandatory)] $Config,
+        [Parameter(Mandatory)][string]$Field,
+        [Parameter(Mandatory)]$Default
+    )
+    if ($Config.PSObject.Properties.Name -contains $Field -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.$Field)) {
+        return $Config.$Field
+    }
+    return $Default
+}
+
+function New-MikrusTimeoutArgs {
+    param([Parameter(Mandatory)] $Config)
+    $ct  = Get-MikrusConnectOption -Config $Config -Field 'connectTimeout'        -Default $script:MikrusDefaultConnectTimeout
+    $sai = Get-MikrusConnectOption -Config $Config -Field 'serverAliveInterval'   -Default $script:MikrusDefaultServerAliveInt
+    $sac = Get-MikrusConnectOption -Config $Config -Field 'serverAliveCountMax'   -Default $script:MikrusDefaultServerAliveCount
+    return @(
+        '-o', "ConnectTimeout=$ct"
+        '-o', "ServerAliveInterval=$sai"
+        '-o', "ServerAliveCountMax=$sac"
+    )
+}
+
 function New-MikrusSSHArgs {
     param(
         [Parameter(Mandatory)] $Config,
@@ -33,9 +67,63 @@ function New-MikrusSSHArgs {
         '-p', "$($Config.sshPort)"
         '-i', "$($Config.identityFile)"
         '-o', 'BatchMode=yes'
+    ) + (New-MikrusTimeoutArgs -Config $Config) + @(
         "$($Config.user)@$($Config.host)"
         $Command
     )
+}
+
+# Domyslny twardy limit (sekundy) na CALY proces ssh/scp. To backstop ostateczny:
+# ConnectTimeout pilnuje tylko handshake TCP, a ServerAlive* dziala dopiero PO
+# uwierzytelnieniu — zwis w fazie wymiany kluczy/auth omija oba i wisialby
+# w nieskonczonosc. Po przekroczeniu proces (z drzewem potomnym) jest ubijany,
+# a wynik ma ExitCode 124 (jak `timeout`). Dla dlugich operacji (backup,
+# streaming) podaj wiekszy -TimeoutSec lub pole commandTimeout w config.json.
+$script:MikrusDefaultCommandTimeout = 180
+
+function Invoke-MikrusNative {
+    # Uruchamia natywny program (ssh/scp) z twardym limitem czasu. Argumenty ida
+    # przez ProcessStartInfo.ArgumentList, ktore escape'uje kazdy element osobno
+    # — tak samo jak operator & , wiec zlozone komendy zdalne (cudzyslowy,
+    # heredoki) zostaja nienaruszone.
+    param(
+        [Parameter(Mandatory)][string]$Exe,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [int]$TimeoutSec
+    )
+    if (-not $TimeoutSec -or $TimeoutSec -le 0) { $TimeoutSec = $script:MikrusDefaultCommandTimeout }
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $Exe
+    foreach ($a in $Arguments) { $psi.ArgumentList.Add([string]$a) }
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.UseShellExecute        = $false
+    $proc = [System.Diagnostics.Process]::new()
+    $proc.StartInfo = $psi
+    $null = $proc.Start()
+    $outTask = $proc.StandardOutput.ReadToEndAsync()
+    $errTask = $proc.StandardError.ReadToEndAsync()
+    if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+        try { $proc.Kill($true) } catch { try { $proc.Kill() } catch {} }
+        try { $null = $proc.WaitForExit(5000) } catch {}
+        $partial = @($outTask, $errTask | ForEach-Object { try { $_.Result } catch { '' } } | Where-Object { $_ })
+        $msg = "TIMEOUT: $Exe nie odpowiedzial w ${TimeoutSec}s (polaczenie/komenda zawieszone) — proces ubity. Zwieksz -TimeoutSec dla dlugich operacji."
+        return [pscustomobject]@{
+            Output   = (@($msg) + $partial) -join [Environment]::NewLine
+            ExitCode = 124
+            TimedOut = $true
+        }
+    }
+    $out = try { $outTask.Result } catch { '' }
+    $err = try { $errTask.Result } catch { '' }
+    $merged = @()
+    if ($err) { $merged += $err.TrimEnd("`r", "`n") }
+    if ($out) { $merged += $out.TrimEnd("`r", "`n") }
+    return [pscustomobject]@{
+        Output   = ($merged -join [Environment]::NewLine)
+        ExitCode = $proc.ExitCode
+        TimedOut = $false
+    }
 }
 
 function Invoke-MikrusSSH {
@@ -43,16 +131,14 @@ function Invoke-MikrusSSH {
     param(
         [Parameter(Mandatory)][string]$Command,
         $Config,
+        [int]$TimeoutSec,
         [switch]$DryRun
     )
     if (-not $Config) { $Config = Get-MikrusConfig }
     $sshArgs = New-MikrusSSHArgs -Config $Config -Command $Command
     if ($DryRun) { return @('ssh') + $sshArgs }
-    $output = & ssh @sshArgs 2>&1
-    return [pscustomobject]@{
-        Output   = $output
-        ExitCode = $LASTEXITCODE
-    }
+    if (-not $TimeoutSec) { $TimeoutSec = Get-MikrusConnectOption -Config $Config -Field 'commandTimeout' -Default $script:MikrusDefaultCommandTimeout }
+    return Invoke-MikrusNative -Exe 'ssh' -Arguments $sshArgs -TimeoutSec $TimeoutSec
 }
 
 function New-MikrusScpArgs {
@@ -65,6 +151,7 @@ function New-MikrusScpArgs {
     )
     $remoteSpec = "$($Config.user)@$($Config.host):$Remote"
     $scpArgs = @('-P', "$($Config.sshPort)", '-i', "$($Config.identityFile)", '-o', 'BatchMode=yes')
+    $scpArgs += New-MikrusTimeoutArgs -Config $Config
     if ($Recurse) { $scpArgs += '-r' }
     if ($Direction -eq 'up') { $scpArgs += @($Local, $remoteSpec) }
     else { $scpArgs += @($remoteSpec, $Local) }
@@ -77,14 +164,15 @@ function Send-MikrusFile {
         [Parameter(Mandatory)][string]$Local,
         [Parameter(Mandatory)][string]$Remote,
         $Config,
+        [int]$TimeoutSec,
         [switch]$Recurse,
         [switch]$DryRun
     )
     if (-not $Config) { $Config = Get-MikrusConfig }
     $scpArgs = New-MikrusScpArgs -Config $Config -Direction up -Local $Local -Remote $Remote -Recurse:$Recurse
     if ($DryRun) { return @('scp') + $scpArgs }
-    $output = & scp @scpArgs 2>&1
-    return [pscustomobject]@{ Output = $output; ExitCode = $LASTEXITCODE }
+    if (-not $TimeoutSec) { $TimeoutSec = Get-MikrusConnectOption -Config $Config -Field 'commandTimeout' -Default $script:MikrusDefaultCommandTimeout }
+    return Invoke-MikrusNative -Exe 'scp' -Arguments $scpArgs -TimeoutSec $TimeoutSec
 }
 
 function Get-MikrusFile {
@@ -93,14 +181,15 @@ function Get-MikrusFile {
         [Parameter(Mandatory)][string]$Remote,
         [Parameter(Mandatory)][string]$Local,
         $Config,
+        [int]$TimeoutSec,
         [switch]$Recurse,
         [switch]$DryRun
     )
     if (-not $Config) { $Config = Get-MikrusConfig }
     $scpArgs = New-MikrusScpArgs -Config $Config -Direction down -Local $Local -Remote $Remote -Recurse:$Recurse
     if ($DryRun) { return @('scp') + $scpArgs }
-    $output = & scp @scpArgs 2>&1
-    return [pscustomobject]@{ Output = $output; ExitCode = $LASTEXITCODE }
+    if (-not $TimeoutSec) { $TimeoutSec = Get-MikrusConnectOption -Config $Config -Field 'commandTimeout' -Default $script:MikrusDefaultCommandTimeout }
+    return Invoke-MikrusNative -Exe 'scp' -Arguments $scpArgs -TimeoutSec $TimeoutSec
 }
 
 function New-MikrusApiRequest {
