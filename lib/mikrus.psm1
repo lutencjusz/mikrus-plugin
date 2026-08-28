@@ -192,6 +192,225 @@ function Get-MikrusFile {
     return Invoke-MikrusNative -Exe 'scp' -Arguments $scpArgs -TimeoutSec $TimeoutSec
 }
 
+function ConvertTo-MikrusShellSingleQuoted {
+    # Cytuje ciag do bezpiecznego wstawienia w apostrofy w bashu. Apostrof zamykamy,
+    # wstawiamy escapowany i otwieramy z powrotem ('\''), bo bash nie zna escape'ow
+    # WEWNATRZ apostrofow. Bez tego sciezka lub komenda z ' rozwala zdalny skrypt.
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+    return "'" + ($Text -replace "'", "'\''") + "'"
+}
+
+function ConvertTo-MikrusLfText {
+    # Normalizuje zakonczenia linii do LF. KAZDY skrypt budowany dla zdalnego basha
+    # musi przez to przejsc: pliki tego repo maja CRLF, wiec here-stringi PowerShella
+    # przenosza \r do skryptu, a bash doklada go do ostatniego argumentu w linii
+    # (`set -e<CR>` -> "invalid option", `"$HOME/.mikrus"<CR>` -> katalog z CR w nazwie).
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+    return ($Text -replace "`r`n", "`n") -replace "`r", "`n"
+}
+
+function New-MikrusHereDocDelimiter {
+    # Dobiera ogranicznik heredoca, ktorego NIE ma w tresci — inaczej plik urwie sie
+    # w losowym miejscu, a reszta poleci do shella jako komendy.
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Content)
+    $delimiter = 'MIKRUS_EOF'
+    $suffix = 0
+    while ($Content -match "(?m)^\s*$delimiter\s*$") {
+        $suffix++
+        $delimiter = "MIKRUS_EOF_$suffix"
+    }
+    return $delimiter
+}
+
+function New-MikrusRemoteWriteScript {
+    # Buduje skrypt bash zapisujacy plik na serwerze przez heredoc. Alternatywa dla SCP,
+    # gdy plik powstaje w locie (nie ma go lokalnie) albo scp jest niedostepny.
+    param(
+        [Parameter(Mandatory)][string]$Remote,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Content,
+        [ValidatePattern('^[0-7]{3,4}$')][string]$Mode
+    )
+    # LF i dokladnie jeden koncowy newline: CRLF z Windows psuje shebang i skrypty bash,
+    # a nadmiarowy newline na koncu rozjezdza md5 wzgledem kopii lokalnej.
+    $body = (ConvertTo-MikrusLfText -Text $Content).TrimEnd("`n")
+    $delimiter = New-MikrusHereDocDelimiter -Content $body
+    $quotedPath = ConvertTo-MikrusShellSingleQuoted -Text $Remote
+    $lines = @(
+        'set -e'
+        "mkdir -p `"`$(dirname $quotedPath)`""
+        "cat > $quotedPath <<'$delimiter'"
+        $body
+        $delimiter
+    )
+    if ($Mode) { $lines += "chmod $Mode $quotedPath" }
+    # md5 na koncu pozwala wolajacemu porownac zapis z oryginalem bez dodatkowej rundy.
+    $lines += "md5sum $quotedPath"
+    return ($lines -join "`n")
+}
+
+function Set-MikrusRemoteFile {
+    [CmdletBinding(DefaultParameterSetName = 'FromFile')]
+    param(
+        [Parameter(Mandatory)][string]$Remote,
+        [Parameter(Mandatory, ParameterSetName = 'FromFile')][string]$Local,
+        [Parameter(Mandatory, ParameterSetName = 'FromContent')][AllowEmptyString()][string]$Content,
+        [ValidatePattern('^[0-7]{3,4}$')][string]$Mode,
+        $Config,
+        [int]$TimeoutSec,
+        [switch]$DryRun
+    )
+    if ($PSCmdlet.ParameterSetName -eq 'FromFile') {
+        if (-not (Test-Path -Path $Local)) { throw "Brak pliku lokalnego: $Local" }
+        $Content = Get-Content -Raw -Path $Local
+    }
+    if ($null -eq $Content) { $Content = '' }
+    # -Mode przekazujemy tylko gdy podany: pusty ciag odbilby sie od ValidatePattern.
+    $writeArgs = @{ Remote = $Remote; Content = $Content }
+    if ($Mode) { $writeArgs['Mode'] = $Mode }
+    $script = New-MikrusRemoteWriteScript @writeArgs
+    return Invoke-MikrusSSH -Command $script -Config $Config -TimeoutSec $TimeoutSec -DryRun:$DryRun
+}
+
+function New-MikrusCronEntry {
+    # Waliduje harmonogram i sklada linie wpisu crontaba (komentarz + wpis).
+    param(
+        [Parameter(Mandatory)][string]$Schedule,
+        [Parameter(Mandatory)][string]$Command,
+        [string]$Comment
+    )
+    $schedule = $Schedule.Trim()
+    $isSpecial = $schedule -match '^@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)$'
+    $fields = @($schedule -split '\s+' | Where-Object { $_ })
+    if (-not $isSpecial -and $fields.Count -ne 5) {
+        throw "Niepoprawny harmonogram cron: '$Schedule'. Oczekiwano 5 pol (min godz dzien miesiac dzien_tygodnia) albo @daily/@reboot."
+    }
+    if ($Command -match "[`r`n]") {
+        throw 'Komenda crona nie moze zawierac znaku nowej linii — crontab traktuje kazda linie osobno.'
+    }
+    if ([string]::IsNullOrWhiteSpace($Command)) {
+        throw 'Komenda crona nie moze byc pusta.'
+    }
+    $entry = "$schedule $($Command.Trim())"
+    $lines = @()
+    foreach ($line in @($Comment -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+        $lines += "# $($line.Trim().TrimStart('#').Trim())"
+    }
+    $lines += $entry
+    return [pscustomobject]@{
+        Entry = $entry
+        Lines = $lines
+        Text  = ($lines -join "`n")
+    }
+}
+
+# Backupy crontaba trafiaja obok konfiguracji, a nie do /tmp — maja przezyc restart
+# kontenera, bo to jedyny slad stanu sprzed zmiany.
+$script:MikrusCronBackupDir = '$HOME/.mikrus'
+
+function New-MikrusCronAddScript {
+    # Skrypt bash: backup crontaba -> sprawdzenie duplikatu -> dopisanie wpisu.
+    # Idempotentny: identyczny wpis nie zostaje dodany drugi raz.
+    param(
+        [Parameter(Mandatory)]$CronEntry
+    )
+    $quotedEntry = ConvertTo-MikrusShellSingleQuoted -Text $CronEntry.Entry
+    $printfArgs = ($CronEntry.Lines | ForEach-Object { ConvertTo-MikrusShellSingleQuoted -Text $_ }) -join ' '
+    $tail = $CronEntry.Lines.Count + 1
+    return ConvertTo-MikrusLfText -Text @"
+set -e
+mkdir -p "$($script:MikrusCronBackupDir)"
+CUR="`$(crontab -l 2>/dev/null || true)"
+BAK="$($script:MikrusCronBackupDir)/crontab.bak-`$(date +%Y%m%d-%H%M%S)"
+printf '%s\n' "`$CUR" > "`$BAK"
+if printf '%s\n' "`$CUR" | grep -qxF $quotedEntry; then
+  echo "MIKRUS-CRON: wpis juz istnieje — bez zmian."
+  exit 0
+fi
+printf '%s\n' "`$CUR" '' $printfArgs | crontab -
+echo "MIKRUS-CRON: dodano wpis (backup: `$BAK)."
+crontab -l | tail -n $tail
+"@
+}
+
+function New-MikrusCronRemoveScript {
+    # Skrypt bash: backup crontaba -> usuniecie linii ZAWIERAJACYCH podany ciag
+    # WRAZ z blokiem komentarza tuz nad nimi i pojedyncza pusta linia separatora.
+    # Bez tego po usunieciu wpisu w crontabie zostaja osierocone komentarze.
+    # Dopasowanie doslowne (awk index), nie regexowe — wzorzec ma byc przewidywalny.
+    # Wzorzec idzie przez ENVIRON, bo `awk -v` interpretowaloby sekwencje `\`.
+    param(
+        [Parameter(Mandatory)][string]$Match
+    )
+    if ([string]::IsNullOrWhiteSpace($Match)) {
+        throw 'Wzorzec usuwania nie moze byc pusty — skasowalby caly crontab.'
+    }
+    $quotedMatch = ConvertTo-MikrusShellSingleQuoted -Text $Match
+    return ConvertTo-MikrusLfText -Text @"
+set -e
+mkdir -p "$($script:MikrusCronBackupDir)"
+CUR="`$(crontab -l 2>/dev/null || true)"
+BAK="$($script:MikrusCronBackupDir)/crontab.bak-`$(date +%Y%m%d-%H%M%S)"
+printf '%s\n' "`$CUR" > "`$BAK"
+NEW="`$(printf '%s\n' "`$CUR" | MIKRUS_CRON_PATTERN=$quotedMatch awk '
+BEGIN { pat = ENVIRON["MIKRUS_CRON_PATTERN"] }
+{ lines[++n] = `$0 }
+END {
+  for (i = 1; i <= n; i++) {
+    if (index(lines[i], pat) == 0) continue
+    del[i] = 1
+    j = i - 1
+    while (j >= 1 && lines[j] ~ /^[[:space:]]*#/) { del[j] = 1; j-- }
+    if (j >= 1 && lines[j] ~ /^[[:space:]]*`$/) del[j] = 1
+  }
+  for (i = 1; i <= n; i++) if (!(i in del)) print lines[i]
+}')"
+if [ "`$CUR" = "`$NEW" ]; then
+  echo "MIKRUS-CRON: nic nie pasuje do wzorca — bez zmian."
+  exit 0
+fi
+printf '%s\n' "`$NEW" | crontab -
+echo "MIKRUS-CRON: usunieto wpisy pasujace do wzorca wraz z komentarzem (backup: `$BAK)."
+crontab -l
+"@
+}
+
+function Get-MikrusCron {
+    [CmdletBinding()]
+    param(
+        $Config,
+        [int]$TimeoutSec,
+        [switch]$DryRun
+    )
+    return Invoke-MikrusSSH -Command 'crontab -l' -Config $Config -TimeoutSec $TimeoutSec -DryRun:$DryRun
+}
+
+function Add-MikrusCronEntry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Schedule,
+        [Parameter(Mandatory)][string]$Command,
+        [string]$Comment,
+        $Config,
+        [int]$TimeoutSec,
+        [switch]$DryRun
+    )
+    $cronEntry = New-MikrusCronEntry -Schedule $Schedule -Command $Command -Comment $Comment
+    $script = New-MikrusCronAddScript -CronEntry $cronEntry
+    return Invoke-MikrusSSH -Command $script -Config $Config -TimeoutSec $TimeoutSec -DryRun:$DryRun
+}
+
+function Remove-MikrusCronEntry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Match,
+        $Config,
+        [int]$TimeoutSec,
+        [switch]$DryRun
+    )
+    $script = New-MikrusCronRemoveScript -Match $Match
+    return Invoke-MikrusSSH -Command $script -Config $Config -TimeoutSec $TimeoutSec -DryRun:$DryRun
+}
+
 function New-MikrusApiRequest {
     param(
         [Parameter(Mandatory)] $Config,

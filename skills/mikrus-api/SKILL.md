@@ -1,6 +1,6 @@
 ---
 name: mikrus-api
-description: Use when performing Mikrus operations through the API (api.mikr.us) — server info, stats, ports, database credentials, logs, restart, amfetamina boost, quick exec, cloud, or assigning a domain. Triggers: "info o serwerze mikrus", "statystyki mikrus", "restart przez API", "dane do bazy mikrus", "porty mikrus", "amfetamina", "logi mikrus", "dodaj domenę".
+description: 'Use when performing Mikrus operations through the API (api.mikr.us) — server info, stats, ports, database credentials, logs, restart, amfetamina boost, quick exec, cloud, or assigning a domain. Triggers: "info o serwerze mikrus", "statystyki mikrus", "restart przez API", "dane do bazy mikrus", "porty mikrus", "amfetamina", "logi mikrus", "dodaj domenę".'
 ---
 
 # mikrus-api

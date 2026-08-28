@@ -122,6 +122,233 @@ Describe 'Send-MikrusFile -DryRun' {
     }
 }
 
+Describe 'ConvertTo-MikrusShellSingleQuoted' {
+    It 'otacza apostrofami zwykly ciag' {
+        ConvertTo-MikrusShellSingleQuoted -Text '/root/plik.py' | Should -Be "'/root/plik.py'"
+    }
+
+    It 'escapuje apostrof wzorcem zamknij-escape-otworz' {
+        ConvertTo-MikrusShellSingleQuoted -Text "it's" | Should -Be "'it'\''s'"
+    }
+
+    It 'radzi sobie z pustym ciagiem' {
+        ConvertTo-MikrusShellSingleQuoted -Text '' | Should -Be "''"
+    }
+}
+
+Describe 'New-MikrusHereDocDelimiter' {
+    It 'zwraca domyslny ogranicznik gdy tresc go nie zawiera' {
+        New-MikrusHereDocDelimiter -Content "print('ok')" | Should -Be 'MIKRUS_EOF'
+    }
+
+    It 'zmienia ogranicznik gdy tresc zawiera go w osobnej linii' {
+        $content = "linia1`nMIKRUS_EOF`nlinia2"
+        New-MikrusHereDocDelimiter -Content $content | Should -Be 'MIKRUS_EOF_1'
+    }
+
+    It 'szuka dalej gdy kolejne warianty tez wystepuja' {
+        $content = "MIKRUS_EOF`nMIKRUS_EOF_1"
+        New-MikrusHereDocDelimiter -Content $content | Should -Be 'MIKRUS_EOF_2'
+    }
+}
+
+Describe 'New-MikrusRemoteWriteScript' {
+    It 'buduje heredoc z trescia i tworzy katalog nadrzedny' {
+        $s = New-MikrusRemoteWriteScript -Remote '/root/skrypty/x.py' -Content "print(1)"
+        $s | Should -Match "cat > '/root/skrypty/x\.py' <<'MIKRUS_EOF'"
+        $s | Should -Match 'mkdir -p'
+        $s | Should -Match 'print\(1\)'
+        $s | Should -Match 'md5sum'
+    }
+
+    It 'zamienia CRLF na LF (CRLF psuje shebang i skrypty bash)' {
+        $s = New-MikrusRemoteWriteScript -Remote '/root/x.sh' -Content "#!/bin/bash`r`necho ok"
+        $s | Should -Not -Match "`r"
+    }
+
+    It 'zostawia dokladnie jeden koncowy newline tresci' {
+        # Nadmiarowy newline rozjezdzalby md5 wzgledem kopii lokalnej.
+        $s = New-MikrusRemoteWriteScript -Remote '/root/x.sh' -Content "echo ok`n`n`n"
+        $s | Should -Match "echo ok`nMIKRUS_EOF"
+    }
+
+    It 'dodaje chmod tylko gdy podano -Mode' {
+        $bez = New-MikrusRemoteWriteScript -Remote '/root/x.sh' -Content 'echo ok'
+        $bez | Should -Not -Match 'chmod'
+        $z = New-MikrusRemoteWriteScript -Remote '/root/x.sh' -Content 'echo ok' -Mode '755'
+        $z | Should -Match "chmod 755 '/root/x\.sh'"
+    }
+
+    It 'odrzuca niepoprawny tryb uprawnien' {
+        { New-MikrusRemoteWriteScript -Remote '/root/x.sh' -Content 'echo ok' -Mode 'rwx' } | Should -Throw
+    }
+
+    It 'nie urywa pliku gdy tresc zawiera domyslny ogranicznik' {
+        $s = New-MikrusRemoteWriteScript -Remote '/root/x.sh' -Content "echo a`nMIKRUS_EOF`necho b"
+        $s | Should -Match "<<'MIKRUS_EOF_1'"
+        $s | Should -Match 'echo b'
+    }
+}
+
+Describe 'Set-MikrusRemoteFile -DryRun' {
+    BeforeAll {
+        $script:cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+    }
+
+    It 'zwraca komende ssh z zdalnym skryptem zapisu' {
+        $cmd = Set-MikrusRemoteFile -Remote '/root/x.sh' -Content 'echo ok' -Config $script:cfg -DryRun
+        $cmd[0] | Should -Be 'ssh'
+        $cmd | Should -Contain 'root@srv03.mikr.us'
+        $cmd[-1] | Should -Match "cat > '/root/x\.sh'"
+    }
+
+    It 'czyta tresc z pliku lokalnego' {
+        $path = Join-Path $TestDrive 'lokalny.sh'
+        Set-Content -Path $path -Value 'echo z-pliku' -Encoding utf8
+        $cmd = Set-MikrusRemoteFile -Remote '/root/x.sh' -Local $path -Config $script:cfg -DryRun
+        $cmd[-1] | Should -Match 'echo z-pliku'
+    }
+
+    It 'rzuca blad gdy plik lokalny nie istnieje' {
+        $path = Join-Path $TestDrive 'nieistnieje.sh'
+        { Set-MikrusRemoteFile -Remote '/root/x.sh' -Local $path -Config $script:cfg -DryRun } |
+            Should -Throw -ExpectedMessage '*Brak pliku lokalnego*'
+    }
+}
+
+Describe 'New-MikrusCronEntry' {
+    It 'sklada wpis z 5-polowego harmonogramu' {
+        $e = New-MikrusCronEntry -Schedule '35 21 * * *' -Command '/root/skrypty/prune.py'
+        $e.Entry | Should -Be '35 21 * * * /root/skrypty/prune.py'
+        $e.Lines.Count | Should -Be 1
+    }
+
+    It 'przyjmuje harmonogramy specjalne (@daily, @reboot)' {
+        (New-MikrusCronEntry -Schedule '@daily' -Command 'echo ok').Entry | Should -Be '@daily echo ok'
+        (New-MikrusCronEntry -Schedule '@reboot' -Command 'echo ok').Entry | Should -Be '@reboot echo ok'
+    }
+
+    It 'poprzedza wpis komentarzem z prefiksem #' {
+        $e = New-MikrusCronEntry -Schedule '0 5 * * *' -Command 'echo ok' -Comment 'backup nocny'
+        $e.Lines[0] | Should -Be '# backup nocny'
+        $e.Lines[1] | Should -Be '0 5 * * * echo ok'
+    }
+
+    It 'nie dubluje # gdy komentarz juz go ma' {
+        $e = New-MikrusCronEntry -Schedule '0 5 * * *' -Command 'echo ok' -Comment '# juz z krata'
+        $e.Lines[0] | Should -Be '# juz z krata'
+    }
+
+    It 'odrzuca harmonogram o zlej liczbie pol' {
+        { New-MikrusCronEntry -Schedule '35 21 * *' -Command 'echo ok' } |
+            Should -Throw -ExpectedMessage '*5 pol*'
+    }
+
+    It 'odrzuca komende z nowa linia (crontab czyta linie osobno)' {
+        { New-MikrusCronEntry -Schedule '0 5 * * *' -Command "echo a`necho b" } |
+            Should -Throw -ExpectedMessage '*nowej linii*'
+    }
+}
+
+Describe 'New-MikrusCronAddScript' {
+    BeforeAll {
+        $script:entry = New-MikrusCronEntry -Schedule '35 21 * * *' -Command '/root/prune.py' -Comment 'retencja'
+    }
+
+    It 'robi backup crontaba przed zmiana' {
+        $s = New-MikrusCronAddScript -CronEntry $script:entry
+        $s | Should -Match 'crontab\.bak-'
+        $s | Should -Match 'crontab -l'
+    }
+
+    It 'jest idempotentny — sprawdza duplikat przez grep -qxF' {
+        $s = New-MikrusCronAddScript -CronEntry $script:entry
+        $s | Should -Match "grep -qxF '35 21 \* \* \* /root/prune\.py'"
+        $s | Should -Match 'juz istnieje'
+    }
+
+    It 'instaluje nowy crontab przez potok do crontab -' {
+        $s = New-MikrusCronAddScript -CronEntry $script:entry
+        $s | Should -Match '\| crontab -'
+        $s | Should -Match "'# retencja'"
+    }
+}
+
+Describe 'New-MikrusCronRemoveScript' {
+    It 'dopasowuje doslownie przez awk index po backupie' {
+        $s = New-MikrusCronRemoveScript -Match '/root/prune.py'
+        $s | Should -Match 'index\(lines\[i\], pat\)'
+        $s | Should -Match 'crontab\.bak-'
+    }
+
+    It 'przekazuje wzorzec przez ENVIRON (awk -v zjadloby sekwencje z backslashem)' {
+        $s = New-MikrusCronRemoveScript -Match '/root/prune.py'
+        $s | Should -Match "MIKRUS_CRON_PATTERN='/root/prune\.py'"
+        $s | Should -Match 'ENVIRON\["MIKRUS_CRON_PATTERN"\]'
+    }
+
+    It 'kasuje takze blok komentarza nad wpisem i pusty separator' {
+        $s = New-MikrusCronRemoveScript -Match '/root/prune.py'
+        $s | Should -Match 'lines\[j\] ~ /\^\[\[:space:\]\]\*#/'
+        $s | Should -Match 'wraz z komentarzem'
+    }
+
+    It 'odrzuca pusty wzorzec (skasowalby caly crontab)' {
+        { New-MikrusCronRemoveScript -Match '   ' } | Should -Throw -ExpectedMessage '*caly crontab*'
+    }
+}
+
+Describe 'Skrypty zdalne nie zawieraja CR' {
+    # Regresja: pliki repo maja CRLF, wiec here-stringi PowerShella przenosily \r
+    # do skryptu. Bash doklada CR do ostatniego argumentu w linii — `set -e<CR>`
+    # konczy sie "invalid option", a sciezka z CR tworzy katalog-widmo.
+    It 'New-MikrusRemoteWriteScript' {
+        $s = New-MikrusRemoteWriteScript -Remote '/root/x.sh' -Content 'echo ok' -Mode '755'
+        $s | Should -Not -Match "`r"
+    }
+
+    It 'New-MikrusCronAddScript' {
+        $e = New-MikrusCronEntry -Schedule '35 21 * * *' -Command '/root/prune.py' -Comment 'retencja'
+        (New-MikrusCronAddScript -CronEntry $e) | Should -Not -Match "`r"
+    }
+
+    It 'New-MikrusCronRemoveScript' {
+        (New-MikrusCronRemoveScript -Match '/root/prune.py') | Should -Not -Match "`r"
+    }
+
+    It 'ConvertTo-MikrusLfText zamienia CRLF i samotny CR na LF' {
+        ConvertTo-MikrusLfText -Text "a`r`nb`rc" | Should -Be "a`nb`nc"
+    }
+}
+
+Describe 'Add-MikrusCronEntry / Remove-MikrusCronEntry -DryRun' {
+    BeforeAll {
+        $script:cfg = [pscustomobject]@{
+            srv='a123'; host='srv03.mikr.us'; sshPort=10123; user='root'
+            identityFile='C:\keys\mikrus_ed25519'; apiKey='SECRET'; apiBase='https://api.mikr.us'
+        }
+    }
+
+    It 'Add zwraca komende ssh ze skryptem dodania' {
+        $cmd = Add-MikrusCronEntry -Schedule '35 21 * * *' -Command '/root/prune.py' -Config $script:cfg -DryRun
+        $cmd[0] | Should -Be 'ssh'
+        $cmd[-1] | Should -Match '\| crontab -'
+    }
+
+    It 'Remove zwraca komende ssh ze skryptem usuniecia' {
+        $cmd = Remove-MikrusCronEntry -Match '/root/prune.py' -Config $script:cfg -DryRun
+        $cmd[-1] | Should -Match 'MIKRUS_CRON_PATTERN'
+    }
+
+    It 'Get-MikrusCron zwraca crontab -l' {
+        $cmd = Get-MikrusCron -Config $script:cfg -DryRun
+        $cmd[-1] | Should -Be 'crontab -l'
+    }
+}
+
 Describe 'New-MikrusApiRequest' {
     BeforeAll {
         $script:cfg = [pscustomobject]@{

@@ -2,12 +2,13 @@
 
 [PL](README_PL.md)
 
-Claude Code skills for managing the [Mikrus](https://mikr.us) VPS: commands over SSH, file transfer (SCP) and operations through the `api.mikr.us` API.
+Claude Code skills for managing the [Mikrus](https://mikr.us) VPS: commands over SSH, file transfer (SCP), remote file writing, cron scheduling and operations through the `api.mikr.us` API.
 
 ## Skills
 - **mikrus-setup** — connection configuration and test (`~/.mikrus/config.json`).
 - **mikrus-terminal** — running commands over SSH.
-- **mikrus-files** — file transfer over SCP.
+- **mikrus-files** — file transfer over SCP, plus writing a file straight onto the server (`Set-MikrusRemoteFile`) when it is generated on the fly.
+- **mikrus-cron** — inspecting and changing the server crontab: idempotent add, removal that also drops the entry's comment, automatic backup before every change.
 - **mikrus-api** — operations through the API (info, stats, ports, db, logs, restart, domain…).
 
 ## Installation

@@ -1,6 +1,6 @@
 ---
 name: mikrus-files
-description: Use when transferring files to or from the Mikrus VPS over SCP — uploading a file/directory to the server or downloading from it. Triggers: "wyślij plik na Mikrusa", "pobierz plik z serwera", "skopiuj katalog na mikrus".
+description: 'Use when transferring files to or from the Mikrus VPS over SCP, or writing a file directly onto the server without a local copy — uploading a file/directory, downloading from it, or creating a remote script from generated content. Triggers: "wyślij plik na Mikrusa", "pobierz plik z serwera", "skopiuj katalog na mikrus", "utwórz skrypt na serwerze", "zapisz plik na Mikrusie".'
 ---
 
 # mikrus-files
@@ -23,6 +23,30 @@ Send-MikrusFile -Local 'C:\projekt' -Remote '/root/projekt' -Recurse
 ```
 
 Aby podejrzeć komendę bez wykonania — `-DryRun`.
+
+## Zapis pliku bez SCP (`Set-MikrusRemoteFile`)
+
+Gdy plik powstaje **w locie** (skrypt generowany przez Claude, konfiguracja składana
+z fragmentów) — nie ma sensu tworzyć kopii lokalnej tylko po to, żeby wysłać ją SCP.
+`Set-MikrusRemoteFile` zapisuje treść przez SSH heredocem:
+
+```powershell
+# Treść prosto z pamięci + prawa wykonywania
+Set-MikrusRemoteFile -Remote '/root/skrypty/nowy.sh' -Content $tresc -Mode 755
+
+# Albo z pliku lokalnego (gdy scp niedostępny)
+Set-MikrusRemoteFile -Remote '/root/skrypty/nowy.sh' -Local 'C:\tmp\nowy.sh'
+```
+
+Funkcja sama: tworzy katalog nadrzędny (`mkdir -p`), **normalizuje CRLF → LF**
+(Windowsowe `\r` psuje shebang i skrypty bash), zostawia dokładnie jeden końcowy
+newline i zwraca `md5sum` zapisanego pliku — porównaj go z lokalnym, żeby potwierdzić
+zapis. Ogranicznik heredoca dobierany jest tak, by nie występował w treści.
+
+> [!WARNING]
+> **Nadpisuje bez pytania.** `Set-MikrusRemoteFile` działa jak `>` — istniejący plik przepada. Przed nadpisaniem
+> czegoś ważnego zrób kopię (`cp plik plik.bak-$(date +%s)` przez mikrus-terminal)
+> albo pokaż użytkownikowi `-DryRun`.
 
 ## Limit czasu (duże transfery)
 

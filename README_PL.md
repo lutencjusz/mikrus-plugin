@@ -2,12 +2,13 @@
 
 [EN](README.md)
 
-Skille Claude Code do obsługi serwera VPS [Mikrus](https://mikr.us): komendy przez SSH, transfer plików (SCP) i operacje przez API `api.mikr.us`.
+Skille Claude Code do obsługi serwera VPS [Mikrus](https://mikr.us): komendy przez SSH, transfer plików (SCP), zapis plików zdalnych, harmonogram cron i operacje przez API `api.mikr.us`.
 
 ## Skille
 - **mikrus-setup** — konfiguracja połączenia i test (`~/.mikrus/config.json`).
 - **mikrus-terminal** — wykonywanie komend przez SSH.
-- **mikrus-files** — transfer plików przez SCP.
+- **mikrus-files** — transfer plików przez SCP oraz zapis pliku wprost na serwerze (`Set-MikrusRemoteFile`), gdy powstaje w locie.
+- **mikrus-cron** — podgląd i zmiana crontaba: idempotentne dodawanie, usuwanie wraz z komentarzem wpisu, automatyczny backup przed każdą zmianą.
 - **mikrus-api** — operacje przez API (info, stats, porty, db, logi, restart, domain…).
 
 ## Instalacja

@@ -1,6 +1,6 @@
 ---
 name: mikrus-terminal
-description: Use when running shell commands on the Mikrus VPS over SSH — checking status, inspecting files/logs, managing services or packages on the server. Triggers: "wykonaj na Mikrusie", "uruchom komendę na serwerze", "sprawdź df -h na mikrusie", "restartuj usługę na serwerze".
+description: 'Use when running shell commands on the Mikrus VPS over SSH — checking status, inspecting files/logs, managing services or packages on the server. Triggers: "wykonaj na Mikrusie", "uruchom komendę na serwerze", "sprawdź df -h na mikrusie", "restartuj usługę na serwerze".'
 ---
 
 # mikrus-terminal

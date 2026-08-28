@@ -1,6 +1,6 @@
 ---
 name: mikrus-setup
-description: Use when configuring the Mikrus VPS connection or testing it — creating ~/.mikrus/config.json, computing the SSH port from the machine number, or verifying that API and SSH work. Triggers: "skonfiguruj Mikrus", "połącz z Mikrusem", "sprawdź połączenie z serwerem", "test mikrus".
+description: 'Use when configuring the Mikrus VPS connection or testing it — creating ~/.mikrus/config.json, computing the SSH port from the machine number, or verifying that API and SSH work. Triggers: "skonfiguruj Mikrus", "połącz z Mikrusem", "sprawdź połączenie z serwerem", "test mikrus".'
 ---
 
 # mikrus-setup
