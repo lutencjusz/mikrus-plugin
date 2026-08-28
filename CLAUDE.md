@@ -53,4 +53,4 @@ pwsh -NoProfile -Command "Invoke-Pester -Path tests/mikrus.Tests.ps1 -FullNameFi
 
 ## Dokumentacja projektowa
 
-`docs/superpowers/specs/` i `docs/superpowers/plans/` zawierają oryginalny design i plan implementacji pluginu.
+Oryginalny design i plan implementacji (`docs/superpowers/`) został usunięty z repo w commicie `2534309`. Aktualnym opisem architektury jest ten plik oraz `README.md` / `README_PL.md`; historię decyzji odtworzysz z `git log`.
