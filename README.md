@@ -9,6 +9,7 @@ Claude Code skills for managing the [Mikrus](https://mikr.us) VPS: commands over
 - **mikrus-terminal** — running commands over SSH.
 - **mikrus-files** — file transfer over SCP, plus writing a file straight onto the server (`Set-MikrusRemoteFile`) when it is generated on the fly.
 - **mikrus-cron** — inspecting and changing the server crontab: idempotent add, removal that also drops the entry's comment, automatic backup before every change.
+- **mikrus-backup** — running the server backup to the "strych" storage (`backup_strych.sh`, two verified archives).
 - **mikrus-api** — operations through the API (info, stats, ports, db, logs, restart, domain…).
 
 ## Installation

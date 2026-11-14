@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Co to jest
 
-Plugin Claude Code o nazwie `mikrus` do obsługi serwera VPS [Mikrus](https://mikr.us). Składa się z pięciu skilli (`skills/*/SKILL.md`), które są cienkimi nakładkami dokumentującymi jeden współdzielony moduł PowerShell `lib/mikrus.psm1`. Cała logika żyje w module; skille opisują tylko, kiedy i jak go wywołać. Język dokumentacji i komunikatów: polski.
+Plugin Claude Code o nazwie `mikrus` do obsługi serwera VPS [Mikrus](https://mikr.us). Składa się z sześciu skilli (`skills/*/SKILL.md`), które są cienkimi nakładkami dokumentującymi jeden współdzielony moduł PowerShell `lib/mikrus.psm1`. Cała logika żyje w module; skille opisują tylko, kiedy i jak go wywołać. Język dokumentacji i komunikatów: polski.
 
 ## Architektura
 
