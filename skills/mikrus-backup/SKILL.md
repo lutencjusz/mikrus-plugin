@@ -14,16 +14,17 @@ Powstają dwa archiwa w `strych:~/backups/`:
 | Archiwum | Zawartość |
 |---|---|
 | `mikrus_yasmin474_root_<RRRR-MM-DD>.tar.gz` | `/root` bez `/root/.cache` |
-| `mikrus_yasmin474_system_<RRRR-MM-DD>.tar.gz` | `/home/openclaw` (bez cache/npm i surowych baz SQLite), spójne kopie baz SQLite OpenClaw, `/usr/local/bin`, `/usr/local/sbin`, `/etc`, `/var/spool/cron` |
+| `mikrus_yasmin474_system_<RRRR-MM-DD>.tar.gz` | `/usr/local/bin`, `/usr/local/sbin`, `/etc`, `/var/spool/cron` (do 2026-11-14 także `/home/openclaw` i kopie baz SQLite OpenClaw) |
 
 Backup uruchamiany jest **ręcznie** — celowo nie jest w cronie. Archiwa są dopisywane
 (nazwa z datą), więc nic nie nadpisuje poprzednich kopii; ponowny przebieg tego samego dnia
-nadpisze tylko archiwa z tą samą datą.
+nadpisze tylko archiwa z tą samą datą. Skrypt zapisuje archiwa z prawami `600`
+(`umask 077` + `chmod 600` po stronie strycha, od 2026-11-20) — zawierają sekrety.
 
 ## Użycie
 
 Najpierw sprawdź połączenie i ewentualnie podejrzyj zakres (`--lista` nic nie wysyła,
-tylko wypisuje pliki; robi jedynie lokalne kopie baz SQLite):
+tylko wypisuje pliki):
 
 ```powershell
 Import-Module "$env:CLAUDE_PLUGIN_ROOT/lib/mikrus.psm1" -Force
@@ -51,7 +52,7 @@ Lista kopii na strychu (i ich rozmiary):
 - `uwaga: czesc plikow zmienila sie w trakcie pakowania (tar kod 1)` → nieszkodliwe, archiwum i tak przeszło weryfikację.
 - `BLAD - ...` (wysyłka, tar, archiwum uszkodzone) lub `ExitCode ≠ 0` → pokaż `Output` i wyjaśnij; nie zgłaszaj sukcesu.
 - `ExitCode = 124` (`TimedOut`) → przekroczony limit czasu; skrypt na serwerze mógł zostać przerwany w połowie — sprawdź listę na strychu i powtórz z większym `-TimeoutSec`.
-- Typowo: `root` ~345 MB + `system` ~3 MB, ok. 90 s.
+- Typowo (2026-11-20): `root` ~615 MB + `system` ~17 MB; archiwa z prawami `-rw-------`.
 
 ## Zasady
 - Backup niczego nie usuwa na serwerze — można go uruchamiać bez dodatkowego potwierdzenia, gdy użytkownik o to prosi. **Nie kasuj** starych archiwów ze strycha bez wyraźnej zgody (pokaż listę i dokładną komendę).
